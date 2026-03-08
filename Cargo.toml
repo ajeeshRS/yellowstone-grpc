@@ -20,7 +20,8 @@ keywords = ["solana"]
 publish = false
 
 [workspace.dependencies]
-affinity = "0.1.2"
+# affinity = "0.1.2"
+core_affinity="0.8"
 anyhow = "1.0.98"
 backoff = "0.4.0"
 base64 = "0.22.1"

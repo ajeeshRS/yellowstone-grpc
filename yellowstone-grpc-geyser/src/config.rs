@@ -123,17 +123,34 @@ fn parse_taskset(taskset: &str) -> Result<Vec<usize>, String> {
     let mut vec = set.into_iter().collect::<Vec<usize>>();
     vec.sort();
 
-    if let Some(set_max_index) = vec.last().copied() {
-        let max_index = affinity::get_thread_affinity()
-            .map_err(|_err| "failed to get affinity".to_owned())?
-            .into_iter()
-            .max()
-            .unwrap_or(0);
+    // if let Some(set_max_index) = vec.last().copied() {
+    //     let max_index = affinity::get_thread_affinity()
+    //         .map_err(|_err| "failed to get affinity".to_owned())?
+    //         .into_iter()
+    //         .max()
+    //         .unwrap_or(0);
 
-        if set_max_index > max_index {
-            return Err(format!("core index must be in the range [0, {max_index}]"));
+    //     if set_max_index > max_index {
+    //         return Err(format!("core index must be in the range [0, {max_index}]"));
+    //     }
+    // }
+
+     if let Some(set_max_index) = vec.last().copied() {
+        if let Some(core_ids) = core_affinity::get_core_ids() {
+            let max_available = core_ids.iter().map(|id| id.id).max().unwrap_or(0);
+
+            if set_max_index > max_available {
+                return Err(format!(
+                    "core index must be in the range [0, {}] (system has {} cores)",
+                    max_available,
+                    core_ids.len()
+                ));
+            }
+        } else {
+            // Rare: failed to query cores (e.g. permission issue) — decide policy
+            return Err("failed to query available CPU cores".to_string());
         }
-    }
+    };
 
     Ok(vec)
 }

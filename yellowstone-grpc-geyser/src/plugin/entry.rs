@@ -8,25 +8,20 @@ use {
             Message, MessageAccount, MessageBlockMeta, MessageEntry, MessageSlot,
             MessageTransaction,
         },
-    },
-    agave_geyser_plugin_interface::geyser_plugin_interface::{
+    }, agave_geyser_plugin_interface::geyser_plugin_interface::{
         GeyserPlugin, GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions,
         ReplicaEntryInfoVersions, ReplicaTransactionInfoVersions, Result as PluginResult,
         SlotStatus,
-    },
-    std::{
+    }, core_affinity::CoreId, std::{
         concat, env,
         sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, Mutex,
+            Arc, Mutex, atomic::{AtomicBool, Ordering}
         },
         time::Duration,
-    },
-    tokio::{
+    }, tokio::{
         runtime::{Builder, Runtime},
         sync::mpsc,
-    },
-    tokio_util::{sync::CancellationToken, task::TaskTracker},
+    }, tokio_util::{sync::CancellationToken, task::TaskTracker}
 };
 
 #[derive(Debug)]
@@ -90,9 +85,26 @@ impl GeyserPlugin for Plugin {
         if let Some(worker_threads) = config.tokio.worker_threads {
             builder.worker_threads(worker_threads);
         }
-        if let Some(tokio_cpus) = config.tokio.affinity.clone() {
+        // if let Some(tokio_cpus) = config.tokio.affinity.clone() {
+        //     builder.on_thread_start(move || {
+        //         affinity::set_thread_affinity(&tokio_cpus).expect("failed to set affinity")
+        //     });
+        // }
+
+           if let Some(tokio_cpus) = config.tokio.affinity.clone() {
             builder.on_thread_start(move || {
-                affinity::set_thread_affinity(&tokio_cpus).expect("failed to set affinity")
+                // Assuming tokio_cpus is Vec<usize> — convert to CoreId
+                for &cpu_index in &tokio_cpus {
+                    let core_id = CoreId { id: cpu_index };
+                    // You can try to set multiple, but most OSes allow only one "primary" core
+                    // or a mask — core_affinity sets one at a time; last one wins if multiple.
+                    // If you want a mask → use lower-level platform APIs or accept single-core pinning.
+                    let success = core_affinity::set_for_current(core_id);
+                    if !success {
+                        eprintln!("Warning: failed to set affinity to core {}", cpu_index);
+                        // or .expect() if you want to panic
+                    }
+                }
             });
         }
         let plugin_cancellation_token = CancellationToken::new();
